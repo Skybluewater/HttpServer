@@ -1,6 +1,17 @@
 # -*- coding:utf-8 -*-
 import os
 import xml.dom.minidom
+from stop_thread import stop_thread
+import threading
+import socket
+
+listIP = []
+listThread = []
+lock = threading.RLock()
+clientEvent = []
+serverEvent = threading.Event()
+clientIDArray = []
+threadNumber = 0
 
 
 # 返回码
@@ -13,8 +24,30 @@ class ErrorCode(object):
 def dict2str(d):
     s = ''
     for i in d:
-        s = s + i+': '+d[i]+'\r\n'
+        s = s + i + ': ' + d[i] + '\r\n'
     return s
+
+
+def daemon_client(client_socket: socket.socket, clientID, fatherThread: threading.Thread, event, addr):
+    event.wait()
+    lock.acquire()
+    try:
+        # try 2 shut down the fatherThread in case that it continues transporting data
+        stop_thread(fatherThread)
+        client_socket.close()
+        clientIDArray[clientID] = 0
+        clientEvent.pop(listThread.index(clientID))
+        listThread.remove(clientID)
+        for i in range(len(listIP)):
+            if listIP[i][0] == addr[0]:
+                listIP[i][1] -= 1
+                if listIP[i][1] == 0:
+                    listIP.pop(i)
+                break
+    finally:
+        lock.release()
+    serverEvent.set()
+
 
 class Session(object):
     def __init__(self):
@@ -36,7 +69,7 @@ class Session(object):
             if node.nodeName == '#text':
                 continue
             else:
-                self.setCookie(node.nodeName, node.childNodes[0].nodeValue)        
+                self.setCookie(node.nodeName, node.childNodes[0].nodeValue)
 
     def write2XML(self):
         import xml.dom.minidom as minidom
@@ -53,10 +86,10 @@ class Session(object):
 
 class HttpRequest(object):
     RootDir = 'root'
-    NotFoundHtml = RootDir+'/404.html'
+    NotFoundHtml = RootDir + '/404/404.html'
     CookieDir = 'root/cookie/'
 
-    def __init__(self):
+    def __init__(self, sock, addr, clientID, event, thread):
         self.method = None
         self.url = None
         self.protocol = None
@@ -67,6 +100,11 @@ class HttpRequest(object):
         self.response_head = dict()
         self.response_body = ''
         self.session = None
+        self.sock = sock
+        self.addr = addr
+        self.clientID = clientID
+        self.event = event
+        self.thread = thread
 
     def passRequestLine(self, request_line):
         header_list = request_line.split(' ')
@@ -86,11 +124,14 @@ class HttpRequest(object):
             self.Cookie = self.head['Cookie']
 
     def passRequest(self, request):
+        deamon = threading.Thread(target=daemon_client,
+                                  args=(self.sock, self.clientID, threading.current_thread(), self.event, self.addr))
+        deamon.start()
         request = request.decode('utf-8')
         if len(request.split('\r\n', 1)) != 2:
             return
         request_line, body = request.split('\r\n', 1)
-        request_head = body.split('\r\n\r\n', 1)[0]     # 头部信息
+        request_head = body.split('\r\n\r\n', 1)[0]
         self.passRequestLine(request_line)
         self.passRequestHead(request_head)
 
@@ -100,15 +141,15 @@ class HttpRequest(object):
         if self.method == 'POST':
             self.request_data = {}
             request_body = body.split('\r\n\r\n', 1)[1]
-            parameters = request_body.split('&')   # 每一行是一个字段
+            parameters = request_body.split('&')  # 每一行是一个字段
             for i in parameters:
-                if i=='':
+                if i == '':
                     continue
                 key, val = i.split('=', 1)
                 self.request_data[key] = val
             self.dynamicRequest(HttpRequest.RootDir + self.url)
         if self.method == 'GET':
-            if self.url.find('?') != -1:        # 含有参数的get
+            if self.url.find('?') != -1:  # 含有参数的get
                 self.request_data = {}
                 req = self.url.split('?', 1)[1]
                 s_url = self.url.split('?', 1)[0]
@@ -122,33 +163,52 @@ class HttpRequest(object):
 
     # 只提供制定类型的静态文件
     def staticRequest(self, path):
-        # print path
+        print(path)
         if not os.path.isfile(path):
-            f = open(HttpRequest.NotFoundHtml, 'r')
+            f = open(HttpRequest.NotFoundHtml, 'rb')
             self.response_line = ErrorCode.NOT_FOUND
             self.response_head['Content-Type'] = 'text/html'
             self.response_body = f.read()
         else:
-            extension_name = os.path.splitext(path)[1]  # 扩展名
-            extension_set = {'.css', '.html', '.js'}
+            extension_name = os.path.splitext(path)[-1]  # 扩展名
             if extension_name == '.png':
                 f = open(path, 'rb')
                 self.response_line = ErrorCode.OK
-                self.response_head['Content-Type'] = 'text/png'
+                self.response_head['Content-Type'] = 'image/png'
                 self.response_body = f.read()
-            elif extension_name in extension_set:
-                f = open(path, 'r')
+                f.close()
+            elif extension_name == '.html':
+                f = open(path, 'rb')
                 self.response_line = ErrorCode.OK
                 self.response_head['Content-Type'] = 'text/html'
                 self.response_body = f.read()
+                f.close()
+            elif extension_name == '.css':
+                f = open(path, 'rb')
+                self.response_line = ErrorCode.OK
+                self.response_head['Content-Type'] = 'text/css'
+                self.response_body = f.read()
+                f.close()
+            elif extension_name == '.js':
+                f = open(path, 'rb')
+                self.response_line = ErrorCode.OK
+                self.response_head['Content-Type'] = 'application/x-javascript'
+                self.response_body = f.read()
+                f.close()
             elif extension_name == '.py':
                 self.dynamicRequest(path)
-            # 其他文件不返回
+            elif extension_name == '.ico':
+                f = open(path, 'rb')
+                self.response_line = ErrorCode.OK
+                self.response_head['Content-Type'] = 'image/x-icon'
+                self.response_body = f.read()
+                f.close()
             else:
                 f = open(HttpRequest.NotFoundHtml, 'r')
                 self.response_line = ErrorCode.NOT_FOUND
                 self.response_head['Content-Type'] = 'text/html'
                 self.response_body = f.read()
+                f.close()
 
     def processSession(self):
         self.session = Session()
@@ -158,22 +218,22 @@ class HttpRequest(object):
             cookie_file = self.CookieDir + self.Cookie
             self.session.cook_file = cookie_file
             self.session.write2XML()
-        else:            
+        else:
             cookie_file = self.CookieDir + self.Cookie
             self.session.cook_file = cookie_file
             if os.path.exists(cookie_file):
-                self.session.loadFromXML()                
-            # 当前cookie不存在，自动创建
+                self.session.loadFromXML()
+                # 当前cookie不存在，自动创建
             else:
                 self.Cookie = self.generateCookie()
-                cookie_file = self.CookieDir+self.Cookie
+                cookie_file = self.CookieDir + self.Cookie
                 self.session.cook_file = cookie_file
-                self.session.write2XML()                
+                self.session.write2XML()
         return self.session
 
-
     def generateCookie(self):
-        import time, hashlib
+        import time
+        import hashlib
         cookie = str(int(round(time.time() * 1000)))
         hl = hashlib.md5()
         hl.update(cookie.encode(encoding='utf-8'))
@@ -191,16 +251,37 @@ class HttpRequest(object):
             file_path = path.split('.', 1)[0].replace('/', '.')
             self.response_line = ErrorCode.OK
             m = __import__(file_path)
-            m.main.SESSION = self.processSession()            
+            m.main.SESSION = self.processSession()
             if self.method == 'POST':
                 m.main.POST = self.request_data
                 m.main.GET = None
             else:
                 m.main.POST = None
                 m.main.GET = self.request_data
-            self.response_body = m.main.app()            
+            self.response_body = m.main.app()
             self.response_head['Content-Type'] = 'text/html'
             self.response_head['Set-Cookie'] = self.Cookie
 
+    def lastHandle(self):
+        lock.acquire()
+        try:
+            clientIDArray[self.clientID] = 0
+            clientEvent.pop(listThread.index(self.clientID))
+            listThread.remove(self.clientID)
+            for i in range(len(listIP)):
+                if listIP[i][0] == self.addr[0]:
+                    listIP[i][1] -= 1
+                    if listIP[i][1] == 0:
+                        listIP.pop(i)
+                    break
+        finally:
+            lock.release()
+        print("client %s:%s quit" % self.addr)
+
     def getResponse(self):
-        return self.response_line+dict2str(self.response_head)+'\r\n'+self.response_body
+        headReturn = (self.response_line + dict2str(self.response_head) + '\r\n').encode('utf-8')
+        bodyReturn = self.response_body
+        self.sock.send(headReturn)
+        self.sock.send(bodyReturn)
+        print(headReturn)
+        self.sock.close()

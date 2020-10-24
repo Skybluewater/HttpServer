@@ -1,11 +1,12 @@
 # -*- coding=utf-8 -*-
 import socket
 import threading
-import queue
-from HttpHead import HttpRequest
+# import queue
+import HttpHead as HH
 
+numConnect = 20
 
-# 每个任务线程
+''''# 每个任务线程
 class WorkThread(threading.Thread):
     def __init__(self, work_queue):
         super().__init__()
@@ -24,35 +25,78 @@ class ThreadPoolManger():
     def __init__(self, thread_number):
         self.thread_number = thread_number
         self.work_queue = queue.Queue()
-        for i in range(self.thread_number):     # 生成一些线程来执行任务
+        for i in range(self.thread_number):  # 生成一些线程来执行任务
             thread = WorkThread(self.work_queue)
             thread.start()
 
     def add_work(self, func, *args):
-        self.work_queue.put((func, args))
+        self.work_queue.put((func, args))  '''
 
 
-def tcp_link(sock, addr):
-    print('Accept new connection from %s:%s...' % addr)
+def find() -> int:
+    for i in range(numConnect):
+        if HH.clientIDArray[i] == 0:
+            return i
+
+
+def ifNeed2Block(addr):
+    flag = 0
+    IPIndex = 0
+    for i in range(len(HH.listIP)):
+        if HH.listIP[i][0] == addr[0]:
+            flag = 1
+            HH.listIP[i][1] += 1
+            IPIndex = i
+            break
+    if flag == 0:
+        HH.listIP.append([addr[0], 1])
+        IPIndex = len(HH.listIP) - 1
+    return IPIndex
+
+
+def tcp_link(sock, addr, clientID, event):
+    # print('Accept new connection from %s:%s...' % addr)
+    print('client IP is: %s' % addr[0])
+    print('client PORT is: %s' % addr[1])
+    IPIndex = ifNeed2Block(addr)
+    # print("Connect NO from client %s is %s" % (addr[0], HH.listIP[IPIndex][1]))
     request = sock.recv(1024)
-    http_req = HttpRequest()
+    http_req = HH.HttpRequest(sock, addr, clientID, event, threading.current_thread())
     http_req.passRequest(request)
-    sock.send(http_req.getResponse().encode('utf-8'))
-    sock.close()
+    http_req.getResponse()
+    http_req.lastHandle()
 
 
 def start_server():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('127.0.0.1', 9999))
-    s.listen(10)
-    thread_pool = ThreadPoolManger(5)
+    s.listen(128)
+    # thread_pool = ThreadPoolManger(numConnect)
     print('listen in %s:%d' % ('127.0.0.1', 9999))
     while True:
         sock, addr = s.accept()
-        thread_pool.add_work(tcp_link, *(sock, addr))
+        clientID = find()
+        HH.clientIDArray[clientID] = 1
+        HH.listThread.append(clientID)
+        print("The Thread Running now is: " + str(HH.listThread))
+        if len(HH.listThread) > numConnect:
+            HH.lock.acquire()
+            try:
+                HH.threadNumber = HH.listThread[0]
+                print("Find conflict and the conflict ThreadNumber is: " + str(HH.threadNumber))
+                event = HH.clientEvent[0]
+                event.set()
+            finally:
+                HH.lock.release()
+            HH.serverEvent.wait()
+            HH.serverEvent.clear()
+        HH.clientEvent.append(threading.Event())
+        client = threading.Thread(target=tcp_link, args=(sock, addr, clientID, HH.clientEvent[-1]))
+        client.start()
 
 
 if __name__ == '__main__':
+    for i in range(0, numConnect + 1):
+        HH.clientIDArray.append(0)
     start_server()
     pass
-
