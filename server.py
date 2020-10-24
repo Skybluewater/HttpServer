@@ -42,15 +42,16 @@ def find() -> int:
 def ifNeed2Block(addr):
     flag = 0
     IPIndex = 0
-    for i in range(len(HH.listIP)):
-        if HH.listIP[i][0] == addr[0]:
+    HH.lock.acquire()
+    for IPIndex in range(len(HH.listIP)):
+        if HH.listIP[IPIndex][0] == addr[0]:
             flag = 1
-            HH.listIP[i][1] += 1
-            IPIndex = i
+            HH.listIP[IPIndex][1] += 1
             break
     if flag == 0:
         HH.listIP.append([addr[0], 1])
         IPIndex = len(HH.listIP) - 1
+    HH.lock.release()
     return IPIndex
 
 
@@ -59,7 +60,6 @@ def tcp_link(sock, addr, clientID, event):
     print('client IP is: %s' % addr[0])
     print('client PORT is: %s' % addr[1])
     IPIndex = ifNeed2Block(addr)
-    # print("Connect NO from client %s is %s" % (addr[0], HH.listIP[IPIndex][1]))
     request = sock.recv(1024)
     http_req = HH.HttpRequest(sock, addr, clientID, event, threading.current_thread())
     http_req.passRequest(request)
