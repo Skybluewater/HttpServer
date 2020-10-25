@@ -23,3 +23,14 @@ def edf():
 
 abc()
 
+import sqlite3
+
+conn = sqlite3.connect("session.db", check_same_thread=False)
+sql_insert = """
+                  insert into sess(sessionID) values(1234);
+                """
+cursor = conn.cursor()
+cursor.execute(sql_insert)
+cursor.close()
+conn.commit()
+conn.close()

@@ -1,8 +1,8 @@
 # -*- coding=utf-8 -*-
 import socket
 import threading
-# import queue
 import HttpHead as HH
+import session as sess
 
 numConnect = 20
 
@@ -60,6 +60,10 @@ def tcp_link(sock, addr, clientID, event):
     print('client IP is: %s' % addr[0])
     print('client PORT is: %s' % addr[1])
     IPIndex = ifNeed2Block(addr)
+    ret = sess.check_client_session(addr)
+    # print("the value returns from sess: " + str(ret))
+    if ret == -1:
+        sess.insert_client_session(addr, sess.generate_session())
     request = sock.recv(1024)
     http_req = HH.HttpRequest(sock, addr, clientID, event, threading.current_thread())
     http_req.passRequest(request)
@@ -69,6 +73,7 @@ def tcp_link(sock, addr, clientID, event):
 
 def start_server():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    threading.Thread(target=sess.refresh_session).start()
     s.bind(('127.0.0.1', 9999))
     s.listen(128)
     # thread_pool = ThreadPoolManger(numConnect)

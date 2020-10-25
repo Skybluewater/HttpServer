@@ -4,6 +4,8 @@ import xml.dom.minidom
 from stop_thread import stop_thread
 import threading
 import socket
+import session as sess
+
 
 listIP = []
 listThread = []
@@ -82,6 +84,14 @@ class Session(object):
         print(self.cook_file)
         with open(self.cook_file, 'w') as f:
             dom.writexml(f, addindent='\t', newl='\n', encoding='utf-8')
+
+    def generateCookie(self):
+        import time
+        import hashlib
+        cookie = str(int(round(time.time() * 1000)))
+        hl = hashlib.md5()
+        hl.update(cookie.encode(encoding='utf-8'))
+        return cookie
 
 
 class HttpRequest(object):
@@ -204,7 +214,7 @@ class HttpRequest(object):
                 self.response_body = f.read()
                 f.close()
             else:
-                f = open(HttpRequest.NotFoundHtml, 'r')
+                f = open(HttpRequest.NotFoundHtml, 'rb')
                 self.response_line = ErrorCode.NOT_FOUND
                 self.response_head['Content-Type'] = 'text/html'
                 self.response_body = f.read()
