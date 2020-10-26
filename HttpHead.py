@@ -6,7 +6,6 @@ import threading
 import socket
 import session as sess
 
-
 listIP = []
 listThread = []
 lock = threading.RLock()
@@ -108,7 +107,7 @@ class HttpRequest(object):
         self.request_data = dict()
         self.response_line = ''
         self.response_head = dict()
-        self.response_body = ''
+        self.response_body = ''.encode('utf-8')
         self.session = None
         self.sock = sock
         self.addr = addr
@@ -252,7 +251,7 @@ class HttpRequest(object):
     def dynamicRequest(self, path):
         # 如果找不到或者后缀名不是py则输出404
         if not os.path.isfile(path) or os.path.splitext(path)[1] != '.py':
-            f = open(HttpRequest.NotFoundHtml, 'r')
+            f = open(HttpRequest.NotFoundHtml, 'rb')
             self.response_line = ErrorCode.NOT_FOUND
             self.response_head['Content-Type'] = 'text/html'
             self.response_body = f.read()

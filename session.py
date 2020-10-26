@@ -24,17 +24,20 @@ def refresh_session():
     cursor = conn.cursor()
     while True:
         sql_query = """
-          select sessionID from sess where ({time} - Time) >= 600;
+          select SessionID from sess where ({time} - Time) >= 600;
         """.format(time=time.time())
         cursor.execute(sql_query)
         if cursor.rowcount != 0:
             query_result = cursor.fetchall()
+            # print("the query result is: " + str(query_result))
             global clientSession
             connLock.acquire()
+            query_result = [x[0] for x in query_result]
             clientSession = list(filter_list(query_result))
+            # print("client session is: " + str(clientSession))
             try:
                 sql_delete = """
-                    delete from sess where sessionID in (select sessionID from sess where ({time} - Time) >= 600);
+                    delete from sess where SessionID in (select SessionID from sess where ({time} - Time) >= 600);
                 """.format(time=time.time())
                 cursor.execute(sql_delete)
                 conn.commit()
@@ -51,8 +54,21 @@ def insert_client_session(addr, sessionID):
         sql_insert = """
           insert into sess (clientIP, UserID, Time, SessionID) values ("{addr}",NULL,{time},{session});
         """.format(addr=addr[0], time=time.time(), session=sessionID)
-
         cursor.execute(sql_insert)
+        conn.commit()
+    finally:
+        connLock.release()
+    cursor.close()
+
+
+def update_client_session(sessionID):
+    cursor = conn.cursor()
+    sql_update = """
+        update sess set Time = {time} where SessionID = {sessionID}
+    """.format(time=time.time(), sessionID=sessionID)
+    connLock.acquire()
+    try:
+        cursor.execute(sql_update)
         conn.commit()
     finally:
         connLock.release()
