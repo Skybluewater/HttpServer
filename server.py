@@ -63,11 +63,12 @@ def tcp_link(sock, addr, clientID, event):
     ret = sess.check_client_session(addr)
     # print("the value returns from sess: " + str(ret))
     if ret == -1:
-        sess.insert_client_session(addr, sess.generate_session())
+        ret = sess.generate_session()
+        sess.insert_client_session(addr, ret)
     else:
         sess.update_client_session(ret)
     request = sock.recv(1024)
-    http_req = HH.HttpRequest(sock, addr, clientID, event, threading.current_thread())
+    http_req = HH.HttpRequest(sock, addr, clientID, event, ret, threading.current_thread())
     http_req.passRequest(request)
     http_req.getResponse()
     http_req.lastHandle()

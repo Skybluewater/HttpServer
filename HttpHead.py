@@ -5,6 +5,7 @@ from stop_thread import stop_thread
 import threading
 import socket
 import session as sess
+import login_request as login
 
 listIP = []
 listThread = []
@@ -98,7 +99,7 @@ class HttpRequest(object):
     NotFoundHtml = RootDir + '/404/404.html'
     CookieDir = 'root/cookie/'
 
-    def __init__(self, sock, addr, clientID, event, thread):
+    def __init__(self, sock, addr, clientID, event, ret, thread):
         self.method = None
         self.url = None
         self.protocol = None
@@ -108,7 +109,7 @@ class HttpRequest(object):
         self.response_line = ''
         self.response_head = dict()
         self.response_body = ''.encode('utf-8')
-        self.session = None
+        self.session = ret
         self.sock = sock
         self.addr = addr
         self.clientID = clientID
@@ -156,7 +157,7 @@ class HttpRequest(object):
                     continue
                 key, val = i.split('=', 1)
                 self.request_data[key] = val
-            self.dynamicRequest(HttpRequest.RootDir + self.url)
+            self.dynamicRequest(self.url)
         if self.method == 'GET':
             if self.url.find('?') != -1:  # 含有参数的get
                 self.request_data = {}
@@ -248,28 +249,32 @@ class HttpRequest(object):
         hl.update(cookie.encode(encoding='utf-8'))
         return cookie
 
+    # def dynamicRequest(self, path):
+    #     # 如果找不到或者后缀名不是py则输出404
+    #     if not os.path.isfile(path) or os.path.splitext(path)[1] != '.py':
+    #         f = open(HttpRequest.NotFoundHtml, 'rb')
+    #         self.response_line = ErrorCode.NOT_FOUND
+    #         self.response_head['Content-Type'] = 'text/html'
+    #         self.response_body = f.read()
+    #     else:
+    #         # 获取文件名，并且将/替换成.
+    #         file_path = path.split('.', 1)[0].replace('/', '.')
+    #         self.response_line = ErrorCode.OK
+    #         m = __import__(file_path)
+    #         m.main.SESSION = self.processSession()
+    #         if self.method == 'POST':
+    #             m.main.POST = self.request_data
+    #             m.main.GET = None
+    #         else:
+    #             m.main.POST = None
+    #             m.main.GET = self.request_data
+    #         self.response_body = m.main.app()
+    #         self.response_head['Content-Type'] = 'text/html'
+    #         self.response_head['Set-Cookie'] = self.Cookie
+
     def dynamicRequest(self, path):
-        # 如果找不到或者后缀名不是py则输出404
-        if not os.path.isfile(path) or os.path.splitext(path)[1] != '.py':
-            f = open(HttpRequest.NotFoundHtml, 'rb')
-            self.response_line = ErrorCode.NOT_FOUND
-            self.response_head['Content-Type'] = 'text/html'
-            self.response_body = f.read()
-        else:
-            # 获取文件名，并且将/替换成.
-            file_path = path.split('.', 1)[0].replace('/', '.')
-            self.response_line = ErrorCode.OK
-            m = __import__(file_path)
-            m.main.SESSION = self.processSession()
-            if self.method == 'POST':
-                m.main.POST = self.request_data
-                m.main.GET = None
-            else:
-                m.main.POST = None
-                m.main.GET = self.request_data
-            self.response_body = m.main.app()
-            self.response_head['Content-Type'] = 'text/html'
-            self.response_head['Set-Cookie'] = self.Cookie
+        if path == 'login':
+            login.login_request(self.request_data['username'], self.request_data['password'])
 
     def lastHandle(self):
         lock.acquire()

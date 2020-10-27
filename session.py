@@ -15,6 +15,18 @@ def check_client_session(addr):
     return -1
 
 
+def check_client_login(username):
+    sql_query = """
+     select * from sess where UserID == {username}
+    """.format(username=username)
+    cursor = conn.cursor()
+    cursor.execute(sql_query)
+    if cursor.rowcount == 0:
+        return 1 # not logged in
+    else:
+        return 0 # have logged in
+
+
 def filter_list(excludes):
     s = set(excludes)
     return (x for x in clientSession if x[1] not in s)
