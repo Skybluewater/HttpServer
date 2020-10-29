@@ -1,11 +1,11 @@
 # -*- coding:utf-8 -*-
 import os
-import xml.dom.minidom
 from stop_thread import stop_thread
 import threading
 import socket
 import login_request as login
 import session as sess
+import log
 
 listIP = []
 listThread = []
@@ -22,6 +22,7 @@ class ErrorCode(object):
     NOT_FOUND = "HTTP/1.1 404 Not Found\r\n"
     FORBIDDEN = "HTTP/1.1 403 Forbidden\r\n"
     UNAUTHORIZED = "HTTP/1.1 401 Unauthorized Access\r\n"
+    BAD_REQUEST = "HTTP/1.1 400 Bad Request\r\n"
 
 
 # 将字典转成字符串
@@ -51,49 +52,6 @@ def daemon_client(client_socket: socket.socket, clientID, fatherThread: threadin
     finally:
         lock.release()
     serverEvent.set()
-
-
-class Session(object):
-    def __init__(self):
-        self.data = dict()
-        self.cook_file = None
-
-    def getCookie(self, key):
-        if key in self.data.keys():
-            return self.data[key]
-        return None
-
-    def setCookie(self, key, value):
-        self.data[key] = value
-
-    def loadFromXML(self):
-        import xml.dom.minidom as minidom
-        root = minidom.parse(self.cook_file).documentElement
-        for node in root.childNodes:
-            if node.nodeName == '#text':
-                continue
-            else:
-                self.setCookie(node.nodeName, node.childNodes[0].nodeValue)
-
-    def write2XML(self):
-        import xml.dom.minidom as minidom
-        dom = xml.dom.minidom.getDOMImplementation().createDocument(None, 'Root', None)
-        root = dom.documentElement
-        for key in self.data:
-            node = dom.createElement(key)
-            node.appendChild(dom.createTextNode(self.data[key]))
-            root.appendChild(node)
-        print(self.cook_file)
-        with open(self.cook_file, 'w') as f:
-            dom.writexml(f, addindent='\t', newl='\n', encoding='utf-8')
-
-    def generateCookie(self):
-        import time
-        import hashlib
-        cookie = str(int(round(time.time() * 1000)))
-        hl = hashlib.md5()
-        hl.update(cookie.encode(encoding='utf-8'))
-        return cookie
 
 
 class HttpRequest(object):
@@ -146,7 +104,7 @@ class HttpRequest(object):
         request_head = body.split('\r\n\r\n', 1)[0]
         self.passRequestLine(request_line)
         self.passRequestHead(request_head)
-
+        log.log_list.append(request_line + "\n" + request_head + "\n")
         # 所有post视为动态请求
         # get如果带参数也视为动态请求
         # 不带参数的get视为静态请求
@@ -160,7 +118,7 @@ class HttpRequest(object):
                 key, val = i.split('=', 1)
                 self.request_data[key] = val
             self.dynamicRequest(self.url)
-        if self.method == 'GET':
+        elif self.method == 'GET' or self.method == 'HEAD':
             if self.url.find('?') != -1:  # 含有参数的get
                 self.request_data = {}
                 req = self.url.split('?', 1)[1]
@@ -172,6 +130,13 @@ class HttpRequest(object):
                 self.dynamicRequest(HttpRequest.RootDir + s_url)
             else:
                 self.staticRequest(HttpRequest.RootDir + self.url)
+        else:
+            self.response_line = ErrorCode.BAD_REQUEST
+            self.response_head['Content-Type'] = 'text/html'
+            path = HttpRequest.RootDir + '/400.html'
+            f = open(path, 'rb')
+            self.response_body = f.read()
+            f.close()
 
     # 只提供制定类型的静态文件
     def staticRequest(self, path):
@@ -183,6 +148,7 @@ class HttpRequest(object):
             f.close()
         else:
             extension_name = os.path.splitext(path)[-1]  # 扩展名
+            tail = path.split('/')[-1]
             if extension_name == '.png':
                 f = open(path, 'rb')
                 self.response_line = ErrorCode.OK
@@ -192,7 +158,6 @@ class HttpRequest(object):
             elif extension_name == '.html':
                 if self.url == "/register.html":
                     result = sess.check_login(self.session)
-                    # print("result is: " + str(result))
                     if result is not None:
                         self.response_line = ErrorCode.FORBIDDEN
                         self.response_head['Content-Type'] = 'text/html'
@@ -237,64 +202,22 @@ class HttpRequest(object):
                 self.response_head['Content-Type'] = 'image/x-icon'
                 self.response_body = f.read()
                 f.close()
+            elif tail == 'logout':
+                ret = sess.check_login(self.session)
+                if ret is None:
+                    self.response_line = ErrorCode.FORBIDDEN
+                    self.response_head['Content-Type'] = 'text/html'
+                    self.response_body = login.logout_request().encode('utf-8')
+                else:
+                    self.response_line = ErrorCode.OK
+                    self.response_head['Content-Type'] = 'text/html'
+                    self.response_body = login.logout_check(self.session).encode('utf-8')
             else:
                 f = open(HttpRequest.NotFoundHtml, 'rb')
                 self.response_line = ErrorCode.NOT_FOUND
                 self.response_head['Content-Type'] = 'text/html'
                 self.response_body = f.read()
                 f.close()
-
-    def processSession(self):
-        self.session = Session()
-        # 没有提交cookie，创建cookie
-        if self.Cookie is None:
-            self.Cookie = self.generateCookie()
-            cookie_file = self.CookieDir + self.Cookie
-            self.session.cook_file = cookie_file
-            self.session.write2XML()
-        else:
-            cookie_file = self.CookieDir + self.Cookie
-            self.session.cook_file = cookie_file
-            if os.path.exists(cookie_file):
-                self.session.loadFromXML()
-                # 当前cookie不存在，自动创建
-            else:
-                self.Cookie = self.generateCookie()
-                cookie_file = self.CookieDir + self.Cookie
-                self.session.cook_file = cookie_file
-                self.session.write2XML()
-        return self.session
-
-    def generateCookie(self):
-        import time
-        import hashlib
-        cookie = str(int(round(time.time() * 1000)))
-        hl = hashlib.md5()
-        hl.update(cookie.encode(encoding='utf-8'))
-        return cookie
-
-    # def dynamicRequest(self, path):
-    #     # 如果找不到或者后缀名不是py则输出404
-    #     if not os.path.isfile(path) or os.path.splitext(path)[1] != '.py':
-    #         f = open(HttpRequest.NotFoundHtml, 'rb')
-    #         self.response_line = ErrorCode.NOT_FOUND
-    #         self.response_head['Content-Type'] = 'text/html'
-    #         self.response_body = f.read()
-    #     else:
-    #         # 获取文件名，并且将/替换成.
-    #         file_path = path.split('.', 1)[0].replace('/', '.')
-    #         self.response_line = ErrorCode.OK
-    #         m = __import__(file_path)
-    #         m.main.SESSION = self.processSession()
-    #         if self.method == 'POST':
-    #             m.main.POST = self.request_data
-    #             m.main.GET = None
-    #         else:
-    #             m.main.POST = None
-    #             m.main.GET = self.request_data
-    #         self.response_body = m.main.app()
-    #         self.response_head['Content-Type'] = 'text/html'
-    #         self.response_head['Set-Cookie'] = self.Cookie
 
     def dynamicRequest(self, path):
         if path == '/login':
@@ -313,6 +236,16 @@ class HttpRequest(object):
             self.response_body = login.register_check(self.request_data['username'], self.request_data['password1'],
                                  self.request_data['password2'], self.request_data['email'], self.session)\
                 .encode('utf-8')
+        elif path == '/logout':
+            ret = sess.check_login(self.session)
+            if ret is None:
+                self.response_line = ErrorCode.FORBIDDEN
+                self.response_head['Content-Type'] = 'text/html'
+                self.response_body = login.logout_request().encode('utf-8')
+            else:
+                self.response_line = ErrorCode.OK
+                self.response_head['Content-Type'] = 'text/html'
+                self.response_body = login.logout_check(self.session).encode('utf-8')
 
     def lastHandle(self):
         lock.acquire()
@@ -328,11 +261,14 @@ class HttpRequest(object):
                     break
         finally:
             lock.release()
-        print("client %s:%s quit" % self.addr)
+        # print("client %s:%s quit" % self.addr)
+        log.log_list.append("client %s:%s quited\n" % self.addr)
 
     def getResponse(self):
         headReturn = (self.response_line + dict2str(self.response_head) + '\r\n').encode('utf-8')
+        log.log_list.append(headReturn.decode() + "\n")
         bodyReturn = self.response_body
         self.sock.send(headReturn)
-        self.sock.send(bodyReturn)
+        if self.method != 'HEAD':
+            self.sock.send(bodyReturn)
         self.sock.close()

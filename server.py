@@ -3,6 +3,7 @@ import socket
 import threading
 import HttpHead as HH
 import session as sess
+import log
 
 numConnect = 20
 
@@ -57,6 +58,7 @@ def ifNeed2Block(addr):
 
 def tcp_link(sock, addr, clientID, event):
     # print('Accept new connection from %s:%s...' % addr)
+    log.log_list.append("Accept new connection from %s:%s... \n" % addr)
     print('client IP is: %s' % addr[0])
     print('client PORT is: %s' % addr[1])
     IPIndex = ifNeed2Block(addr)
@@ -77,6 +79,7 @@ def tcp_link(sock, addr, clientID, event):
 def start_server():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     threading.Thread(target=sess.refresh_session).start()
+    threading.Thread(target=log.append_file).start()
     s.bind(('127.0.0.1', 9999))
     s.listen(128)
     # thread_pool = ThreadPoolManger(numConnect)
@@ -86,12 +89,14 @@ def start_server():
         clientID = find()
         HH.clientIDArray[clientID] = 1
         HH.listThread.append(clientID)
-        print("The Thread Running now is: " + str(HH.listThread))
+        # print("The Thread Running now is: " + str(HH.listThread))
+        log.log_list.append("The Thread Running now is: %s\n" % str(HH.listThread))
         if len(HH.listThread) > numConnect:
             HH.lock.acquire()
             try:
                 HH.threadNumber = HH.listThread[0]
-                print("Find conflict and the conflict ThreadNumber is: " + str(HH.threadNumber))
+                # print("Find conflict and the conflict ThreadNumber is: " + str(HH.threadNumber))
+                log.log_list.append("Find conflict and the conflict ThreadNumber is: %s\n" % str(HH.threadNumber))
                 event = HH.clientEvent[0]
                 event.set()
             finally:

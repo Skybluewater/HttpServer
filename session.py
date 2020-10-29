@@ -45,12 +45,18 @@ def set_client_name(username, sessionID):
     connLock.release()
 
 
-def get_client_name(sessionID):
+def update_login(sessionID):
     cursor = conn.cursor()
-    sql_query = """
-    select UserID from sess where SessionID = {sessionID};
+    sql_update = """
+    update sess set UserID = NULL where SessionID = {sessionID};
     """.format(sessionID=sessionID)
-    result = cursor.execute(sql_query).fetchall()
+    connLock.acquire()
+    try:
+        cursor.execute(sql_update)
+        conn.commit()
+    finally:
+        cursor.close()
+    connLock.release()
 
 
 def filter_list(excludes):
@@ -72,7 +78,6 @@ def refresh_session():
             connLock.acquire()
             query_result = [x[0] for x in query_result]
             clientSession = list(filter_list(query_result))
-            # print("client session is: " + str(clientSession))
             try:
                 sql_delete = """
                     delete from sess where SessionID in (select SessionID from sess where ({time} - Time) >= 600);

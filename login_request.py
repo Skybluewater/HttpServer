@@ -5,7 +5,7 @@ import render_html as html
 
 def login_check(username, password, sessionID):
     ret = sess.check_client_login(username=username)
-    print("ret: " + str(ret))
+    # print("ret: " + str(ret))
     if ret == 1:
         check_result = db.check_password(username, password)
         if check_result == "Pass":
@@ -37,6 +37,15 @@ def register_check(username, password1, password2, email, sessionID):
         return html.render(html.render_navbar(), html.register_html.password_not_same)
     db.user_register(username, password1, email, sessionID)
     return html.render(html.render_navbar(username))
+
+
+def logout_check(sessionID):
+    sess.update_login(sessionID=sessionID)
+    return html.render(html.render_navbar())
+
+
+def logout_request():
+    return html.render(html.render_navbar(), html.changePass_html.no_login)
 
 
 def forget_pass_check(username, password1, password2):

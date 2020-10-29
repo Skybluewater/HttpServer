@@ -36,11 +36,10 @@ class base_html(object):
         <!-- Collect the nav links, forms, and other content for toggling -->
         <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
             <ul class="nav navbar-nav">
-                <li class="active"><a href="#">主页 <span class="sr-only">(current)</span></a></li>
-                <li><a href="#">监控</a></li>
-                <li><a href="#">新闻</a></li>
-                <li><a href="#">音乐</a></li>
-                <li><a href="#">电影</a></li>
+                <li><a href="#">主页 <span class="sr-only">(current)</span></a></li>
+                <li><a href="login.html">登陆</a></li>
+                <li><a href="register.html">注册</a></li>
+                <li><a href="changePass.html">更改密码</a></li>
 
             </ul>
             {nav_bar_right}
@@ -58,13 +57,13 @@ class base_html(object):
                             菜单栏
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a href="register.html">密码记不住?更改密码</a></li>
+                            <li><a href="/changePass.html">密码记不住?更改密码</a></li>
                             <li role="separator" class="divider"></li>
                             <li><a href="money">联系我们</a></li>
                         </ul>
                     </li>
                     <li><a href="#">当前在线：{username}</a></li>
-                    <li><a href="/logout/">登出</a></li>
+                    <li><a href="/logout" method="POST">登出</a></li>
             </ul>
     """
 
