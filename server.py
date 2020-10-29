@@ -4,10 +4,13 @@ import threading
 import HttpHead as HH
 import session as sess
 import log
+import time
 
 numConnect = 20
 
-''''# 每个任务线程
+
+''''
+# 每个任务线程
 class WorkThread(threading.Thread):
     def __init__(self, work_queue):
         super().__init__()
@@ -31,11 +34,12 @@ class ThreadPoolManger():
             thread.start()
 
     def add_work(self, func, *args):
-        self.work_queue.put((func, args))  '''
+        self.work_queue.put((func, args))
+'''
 
 
 def find() -> int:
-    for i in range(numConnect):
+    for i in range(100000):
         if HH.clientIDArray[i] == 0:
             return i
 
@@ -58,9 +62,10 @@ def ifNeed2Block(addr):
 
 def tcp_link(sock, addr, clientID, event):
     # print('Accept new connection from %s:%s...' % addr)
-    log.log_list.append("Accept new connection from %s:%s... \n" % addr)
-    print('client IP is: %s' % addr[0])
-    print('client PORT is: %s' % addr[1])
+    log.log_list.append("time: %s\n" % str(time.asctime(time.localtime(time.time()))))
+    log.log_list.append("Accept new connection from %s:%s...\n" % addr)
+    # print('client IP is: %s' % addr[0])
+    # print('client PORT is: %s' % addr[1])
     IPIndex = ifNeed2Block(addr)
     ret = sess.check_client_session(addr)
     # print("the value returns from sess: " + str(ret))
@@ -109,7 +114,7 @@ def start_server():
 
 
 if __name__ == '__main__':
-    for i in range(0, numConnect + 1):
+    for i in range(0, 100000):
         HH.clientIDArray.append(0)
     start_server()
     pass

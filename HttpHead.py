@@ -15,6 +15,9 @@ serverEvent = threading.Event()
 clientIDArray = []
 threadNumber = 0
 
+f = open("root/index.html", 'rb')
+index_html = f.read()
+
 
 # 返回码
 class ErrorCode(object):
@@ -41,8 +44,14 @@ def daemon_client(client_socket: socket.socket, clientID, fatherThread: threadin
         stop_thread(fatherThread)
         client_socket.close()
         clientIDArray[clientID] = 0
-        clientEvent.pop(listThread.index(clientID))
-        listThread.remove(clientID)
+        try:
+            clientEvent.pop(listThread.index(clientID))
+        except Exception as er:
+            log.log_list.append("RaiseError: %s\n" % str(er))
+        try:
+            listThread.remove(clientID)
+        except Exception as er:
+            log.log_list.append("RaiseError: %s\n" % str(er))
         for i in range(len(listIP)):
             if listIP[i][0] == addr[0]:
                 listIP[i][1] -= 1
@@ -156,6 +165,11 @@ class HttpRequest(object):
                 self.response_body = f.read()
                 f.close()
             elif extension_name == '.html':
+                if self.url == "/index.html":
+                    self.response_line = ErrorCode.OK
+                    self.response_head['Content-Type'] = 'text/html'
+                    self.response_body = index_html
+                    return
                 if self.url == "/register.html":
                     result = sess.check_login(self.session)
                     if result is not None:
@@ -270,5 +284,8 @@ class HttpRequest(object):
         bodyReturn = self.response_body
         self.sock.send(headReturn)
         if self.method != 'HEAD':
-            self.sock.send(bodyReturn)
+            try:
+                self.sock.send(bodyReturn)
+            except Exception as br:
+                log.log_list.append("RaiseError: %s\n" % str(br))
         self.sock.close()
