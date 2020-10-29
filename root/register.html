@@ -59,28 +59,31 @@
     <div class="col-lg-4 col-lg-offset-4" style="margin-top: 50px">
 
         <h1>
-            登录
+            注册
             <small>
-                没有账号？
-                <a href="register.html">注册</a>
+                已有账号？
+                <a href="login.html">登陆</a>
             </small>
 
         </h1>
-        <form action="/login" method="POST">
+        <form action="/register" method="POST">
             <div class="form-group">
                 <label for="username">用户名</label>
                 <input type="text" class="form-control" name="username" id="username" placeholder="Username">
             </div>
             <div class="form-group">
-                <label for="password">密码</label>
-                <input type="password" class="form-control" name="password" id="password" placeholder="Password">
+                <label for="password1">输入密码</label>
+                <input type="password" class="form-control" name="password1" id="password1" placeholder="Password">
             </div>
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox"> 记住密码
-                </label>
+            <div class="form-group">
+                <label for="password2">确认密码</label>
+                <input type="password" class="form-control" name="password2" id="password2" placeholder="PasswordAgain">
             </div>
-            <button type="submit" class="btn btn-success btn-block">登录</button>
+            <div class="form-group">
+                <label for="email">邮箱</label>
+                <input type="email" class="form-control" name="email" id="email" placeholder="Email">
+            </div>
+            <button type="submit" class="btn btn-success btn-block">注册</button>
         </form>
 
 

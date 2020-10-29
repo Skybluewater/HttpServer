@@ -4,8 +4,8 @@ import xml.dom.minidom
 from stop_thread import stop_thread
 import threading
 import socket
-import session as sess
 import login_request as login
+import session as sess
 
 listIP = []
 listThread = []
@@ -20,6 +20,8 @@ threadNumber = 0
 class ErrorCode(object):
     OK = "HTTP/1.1 200 OK\r\n"
     NOT_FOUND = "HTTP/1.1 404 Not Found\r\n"
+    FORBIDDEN = "HTTP/1.1 403 Forbidden\r\n"
+    UNAUTHORIZED = "HTTP/1.1 401 Unauthorized Access\r\n"
 
 
 # 将字典转成字符串
@@ -99,7 +101,7 @@ class HttpRequest(object):
     NotFoundHtml = RootDir + '/404/404.html'
     CookieDir = 'root/cookie/'
 
-    def __init__(self, sock, addr, clientID, event, ret, thread):
+    def __init__(self, sock, addr, clientID, event, sess, thread):
         self.method = None
         self.url = None
         self.protocol = None
@@ -109,7 +111,7 @@ class HttpRequest(object):
         self.response_line = ''
         self.response_head = dict()
         self.response_body = ''.encode('utf-8')
-        self.session = ret
+        self.session = sess
         self.sock = sock
         self.addr = addr
         self.clientID = clientID
@@ -173,12 +175,12 @@ class HttpRequest(object):
 
     # 只提供制定类型的静态文件
     def staticRequest(self, path):
-        print(path)
         if not os.path.isfile(path):
             f = open(HttpRequest.NotFoundHtml, 'rb')
             self.response_line = ErrorCode.NOT_FOUND
             self.response_head['Content-Type'] = 'text/html'
             self.response_body = f.read()
+            f.close()
         else:
             extension_name = os.path.splitext(path)[-1]  # 扩展名
             if extension_name == '.png':
@@ -188,6 +190,28 @@ class HttpRequest(object):
                 self.response_body = f.read()
                 f.close()
             elif extension_name == '.html':
+                if self.url == "/register.html":
+                    result = sess.check_login(self.session)
+                    # print("result is: " + str(result))
+                    if result is not None:
+                        self.response_line = ErrorCode.FORBIDDEN
+                        self.response_head['Content-Type'] = 'text/html'
+                        self.response_body = login.register_request(result).encode('utf-8')
+                        return
+                elif self.url == "/changePass.html":
+                    result = sess.check_login(self.session)
+                    if result is None:
+                        self.response_line = ErrorCode.UNAUTHORIZED
+                        self.response_head['Content-Type'] = 'text/html'
+                        self.response_body = login.changePass_request().encode('utf-8')
+                        return
+                elif self.url == "/login.html":
+                    result = sess.check_login(self.session)
+                    if result is not None:
+                        self.response_line = ErrorCode.FORBIDDEN
+                        self.response_head['Content-Type'] = 'text/html'
+                        self.response_body = login.login_request(result).encode('utf-8')
+                        return
                 f = open(path, 'rb')
                 self.response_line = ErrorCode.OK
                 self.response_head['Content-Type'] = 'text/html'
@@ -273,8 +297,22 @@ class HttpRequest(object):
     #         self.response_head['Set-Cookie'] = self.Cookie
 
     def dynamicRequest(self, path):
-        if path == 'login':
-            login.login_request(self.request_data['username'], self.request_data['password'])
+        if path == '/login':
+            self.response_body = login.login_check(self.request_data['username'], self.request_data['password'],
+                                                   self.session).encode('utf-8')
+            self.response_line = ErrorCode.OK
+            self.response_head['Content-Type'] = 'text/html'
+        elif path == '/changePass':
+            self.response_body = login.change_pass_check(self.request_data['password'], self.request_data['password1'],
+                                                         self.request_data['password2'], self.session).encode('utf-8')
+            self.response_line = ErrorCode.OK
+            self.response_head['Content-Type'] = 'text/html'
+        elif path == '/register':
+            self.response_line = ErrorCode.OK
+            self.response_head['Content-Type'] = 'text/html'
+            self.response_body = login.register_check(self.request_data['username'], self.request_data['password1'],
+                                 self.request_data['password2'], self.request_data['email'], self.session)\
+                .encode('utf-8')
 
     def lastHandle(self):
         lock.acquire()
@@ -297,5 +335,4 @@ class HttpRequest(object):
         bodyReturn = self.response_body
         self.sock.send(headReturn)
         self.sock.send(bodyReturn)
-        print(headReturn)
         self.sock.close()

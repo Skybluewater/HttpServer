@@ -1,4 +1,3 @@
-import data_base as db
 import sqlite3
 import time
 import threading
@@ -17,14 +16,41 @@ def check_client_session(addr):
 
 def check_client_login(username):
     sql_query = """
-     select * from sess where UserID == {username}
+     select * from sess where UserID = "{username}"
     """.format(username=username)
+    # print(sql_query)
     cursor = conn.cursor()
     cursor.execute(sql_query)
-    if cursor.rowcount == 0:
-        return 1 # not logged in
+    if len(cursor.fetchall()) == 0:
+        cursor.close()
+        return 1
+        # not logged in
     else:
-        return 0 # have logged in
+        cursor.close()
+        return 0
+        # have logged in
+
+
+def set_client_name(username, sessionID):
+    cursor = conn.cursor()
+    sql_update = """
+        update sess set UserID = "{userID}" where SessionID = {sessionID}
+    """.format(userID=username, sessionID=sessionID)
+    connLock.acquire()
+    try:
+        cursor.execute(sql_update)
+        conn.commit()
+    finally:
+        cursor.close()
+    connLock.release()
+
+
+def get_client_name(sessionID):
+    cursor = conn.cursor()
+    sql_query = """
+    select UserID from sess where SessionID = {sessionID};
+    """.format(sessionID=sessionID)
+    result = cursor.execute(sql_query).fetchall()
 
 
 def filter_list(excludes):
@@ -39,7 +65,7 @@ def refresh_session():
           select SessionID from sess where ({time} - Time) >= 600;
         """.format(time=time.time())
         cursor.execute(sql_query)
-        if cursor.rowcount != 0:
+        if len(cursor.fetchall()) > 0:
             query_result = cursor.fetchall()
             # print("the query result is: " + str(query_result))
             global clientSession
@@ -63,6 +89,11 @@ def insert_client_session(addr, sessionID):
     cursor = conn.cursor()
     connLock.acquire()
     try:
+        sql_delete = """
+            delete from sess where clientIP = "{clientIP}"
+        """.format(clientIP=addr[0])
+        cursor.execute(sql_delete)
+        conn.commit()
         sql_insert = """
           insert into sess (clientIP, UserID, Time, SessionID) values ("{addr}",NULL,{time},{session});
         """.format(addr=addr[0], time=time.time(), session=sessionID)
@@ -93,3 +124,15 @@ def generate_session():
     hl = hashlib.md5()
     hl.update(session.encode(encoding='utf-8'))
     return int(session)
+
+
+def check_login(sessionID):
+    cursor = conn.cursor()
+    sql_query = """
+      select UserID from sess where SessionID = {sessionID}
+    """.format(sessionID=sessionID)
+    result = cursor.execute(sql_query).fetchall()
+    cursor.close()
+    if result[0][0] is None:
+        return None
+    return result[0][0]
