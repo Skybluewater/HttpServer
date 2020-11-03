@@ -39,7 +39,7 @@ class ThreadPoolManger():
 
 
 def find() -> int:
-    for i in range(100000):
+    for i in range(200000):
         if HH.clientIDArray[i] == 0:
             return i
 
@@ -85,10 +85,10 @@ def start_server():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     threading.Thread(target=sess.refresh_session).start()
     threading.Thread(target=log.append_file).start()
-    s.bind(('127.0.0.1', 9999))
+    s.bind(('10.62.175.86', 9999))
     s.listen(128)
     # thread_pool = ThreadPoolManger(numConnect)
-    print('listen in %s:%d' % ('127.0.0.1', 9999))
+    print('listen in %s:%d' % ('10.62.175.86', 9999))
     while True:
         sock, addr = s.accept()
         clientID = find()
@@ -114,7 +114,7 @@ def start_server():
 
 
 if __name__ == '__main__':
-    for i in range(0, 100000):
+    for i in range(0, 200000):
         HH.clientIDArray.append(0)
     start_server()
     pass
